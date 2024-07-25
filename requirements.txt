@@ -1,0 +1,8 @@
+# in addition to the documented dependecy requirements, we need to install the following
+# still need to do the following to run LDM training and diff-foley inference code
+pip install omegaconf future tensorboard pyDeprecate==0.3.1
+pip install pytorch-lightning==1.2.10 --no-deps
+pip install torchmetrics==0.6.0
+pip install imageio
+pip install moviepy
+pip install librosa=0.8.0

@@ -1,0 +1,155 @@
+model:
+  base_learning_rate: 1.0e-4
+  target: ldm.models.diffusion.sd_ddpm_scale.LatentDiffusion
+  params:
+    sim_weighting_map: None
+    linear_start: 0.00085
+    linear_end: 0.0120
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: "mix_spec"
+    cond_stage_key: "mix_video_feat"
+    image_size: 64
+    channels: 4
+    cond_stage_trainable: true   # Note: different from the one we trained before
+    conditioning_key: crossattn
+    monitor: val/loss_simple_ema
+    scale_factor: 0.18215
+    use_ema: False
+    ckpt_path: "data/pretrained/sd-v1-4-full-ema.ckpt"
+    video_cond_len: 16
+    video_cond_dim: 768
+    video_encoder: "timesformer"
+    pretrained_video_extractor: "data/pretrained/egovlp.pth"
+
+    scheduler_config: # 10000 warmup steps
+      target: ldm.lr_scheduler.LambdaLinearScheduler
+      params:
+        warm_up_steps: [ 1000 ]
+        cycle_lengths: [ 10000000000000 ] # incredibly large number to prevent corner cases
+        f_start: [ 1.e-6 ]
+        f_max: [ 1. ]
+        f_min: [ 1. ]
+
+    unet_config:
+      target: ldm.modules.diffusionmodules.openai_unetmodel.UNetModel
+      params:
+        image_size: 32 # unused
+        in_channels: 4
+        out_channels: 4
+        model_channels: 320
+        attention_resolutions: [ 4, 2, 1 ]
+        num_res_blocks: 2
+        channel_mult: [ 1, 2, 4, 4 ]
+        num_heads: 8
+        use_spatial_transformer: True
+        transformer_depth: 1
+        context_dim: 768
+        use_checkpoint: True
+        legacy: False
+
+    first_stage_config:
+      target: ldm.models.autoencoder_img.AutoencoderKL
+      params:
+        embed_dim: 4
+        monitor: val/rec_loss
+        ddconfig:
+          double_z: true
+          z_channels: 4
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult:
+          - 1
+          - 2
+          - 4
+          - 4
+          num_res_blocks: 2
+          attn_resolutions: []
+          dropout: 0.0
+        lossconfig:
+          target: torch.nn.Identity
+    
+    cond_stage_config:
+      target: ldm.modules.cond_stage.video_feat_encoder.Video_Feat_Encoder_Posembed
+      params:
+        origin_dim: 768
+        embed_dim: 768
+        seq_len: 16
+      
+    audio_cond_config:
+      neighbor_audio_cond_prob: -1 # if bigger than 0, use audio from neighbor frames as conditioning with certain probability
+      target: ldm.modules.cond_stage.audio_feat_encoder.Audio_Feat_Encoder_Posembed
+      params:
+        input_shape: [ 4, 16, 24 ] # batch is not considered, 4: channel, 16: freq (but not exactly as it's VAE's output), 188: time (but not exactly)
+        embed_dim: 768
+        target_seq_len: 24
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 150 # overwitten by command line
+    num_workers: 4 # overwitten by command line
+    wrap: True
+    train:
+      target: ldm.datasets.ego4dsounds_dataset.ego4dsounds_train
+      params:
+        dataset_name: ego4dsounds
+        data_dir: data/ego4dsounds_224p
+        metadata_file: data/meta/ego4dsounds/train_clips_0.4m.csv
+        video_params:
+          input_res: 224
+          loading: lax
+          transform: True
+        audio_params:
+          duration: 3
+          sample_rate: 16000
+          input_fdim: 128
+          input_tdim: 196
+    validation:
+      target: ldm.datasets.ego4dsounds_dataset.ego4dsounds_validation
+      params:
+        dataset_name: ego4dsounds
+        data_dir: data/ego4dsounds_224p
+        metadata_file: data/meta/ego4dsounds/train_clips_0.4m.csv
+        video_params:
+          input_res: 224
+          loading: lax
+          transform: True
+        audio_params:
+          duration: 3
+          sample_rate: 16000
+          input_fdim: 128
+          input_tdim: 196
+    test:
+      target: ldm.datasets.ego4dsounds_dataset.ego4dsounds_test
+      params:
+        dataset_name: ego4dsounds
+        data_dir: data/ego4dsounds_224p_test
+        metadata_file: data/meta/ego4dsounds/test_clips_11k.csv
+        video_params:
+          input_res: 224
+          loading: lax
+          transform: True
+        audio_params:
+          duration: 3
+          sample_rate: 16000
+          input_fdim: 128
+          input_tdim: 196
+        
+checkpoint:
+  save_every_n_epochs: 4
+
+callback:
+  logger_name: sound_logger
+  target: ldm.logger.SoundLogger_concat_fullset
+  params: 
+    train_batch_frequency: 1000
+    val_batch_frequency: 1000
+    max_sound_num: 6
+    sr: 16000
+    fps: 5
+    guidance_scale: 6.5
+    size_len: 24
