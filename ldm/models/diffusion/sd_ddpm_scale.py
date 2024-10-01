@@ -697,7 +697,12 @@ class LatentDiffusion(DDPM):
         self.evaluators = {}
         for metric in self.test_metrics:
             if metric == 'fad':
+                # temporarily remove command line args, prevent argparse errors while importing FAD
+                import sys
+                saved_args = sys.argv
+                sys.argv = sys.argv[:1]
                 from frechet_audio_distance import FrechetAudioDistance
+                sys.argv = saved_args
                 
                 self.evaluators['fad'] = FrechetAudioDistance(
                     model_name="vggish",
@@ -734,6 +739,32 @@ class LatentDiffusion(DDPM):
                 for model in [audio_encoder, text_encoder, txt_proj]:
                     model.eval()
                 print('Loaded ALSim evaluator')
+            elif metric=="av_sim":
+                from model.ast_model import ASTModel
+                from ldm.models.video_transformer import SpaceTimeTransformer
+                
+                ckpt = torch.load(self.args.pretrained_av_sim, map_location='cpu')
+                state_dict = ckpt['state_dict']
+                
+                audio_encoder = ASTModel(label_dim=256, fstride=10, tstride=10, input_fdim=128, 
+                                        input_tdim=self.args.ast_tdim, imagenet_pretrain=True)
+                audio_state_dict = {k.replace('module.audio_model.', ''): v for k, v in state_dict.items() if k.startswith('module.audio_model')}
+                audio_encoder.load_state_dict(audio_state_dict, strict=True)
+                
+                video_encoder = SpaceTimeTransformer(num_frames=16, time_init='zeros')
+                video_encoder.head = nn.Identity()
+                video_encoder.pre_logits = nn.Identity()
+                video_state_dict = {k.replace('module.video_model.', ''): v for k, v in state_dict.items() if k.startswith('module.video_model')}
+                video_encoder.fc = nn.Identity()
+                video_encoder.load_state_dict(video_state_dict, strict=True)
+                
+                vid_proj = nn.Sequential(nn.Linear(768, 256))
+                vid_proj.load_state_dict({k.replace('module.vid_proj.', ''): v for k, v in state_dict.items() if 'vid_proj' in k}, strict=True)
+                
+                self.evaluators['av_sim'] = {'audio_encoder': audio_encoder, 'video_encoder': video_encoder, 'vid_proj': vid_proj}
+                for model in [audio_encoder, video_encoder, vid_proj]:
+                    model.eval()
+                print('Loaded AVSim evaluator') 
             elif metric == "av_sync":
                 from model.ast_model import ASTModel
                 from ldm.models.video_transformer import SpaceTimeTransformer
