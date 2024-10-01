@@ -234,7 +234,7 @@ def run(opt, unknown):
     default_logger_cfg = {
         "target": "pytorch_lightning.loggers.WandbLogger",
         "params": {
-            "entity": 'avlp',
+            # "entity": 'avlp',
             "project": opt.wandb_project,
             "name": nowname,
             "save_dir": os.path.join(root_dir, logdir),

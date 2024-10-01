@@ -17,7 +17,6 @@ import librosa
 import noisereduce as nr
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 from moviepy.editor import VideoFileClip, concatenate_videoclips
-from ldm.webify import webify, webify_with_energy
 import logging
 import random
 
@@ -148,7 +147,6 @@ def generate_demo(model, batch, batch_idx, split, output_dir=None, args=None):
 
     
     print('Finish generating demo for batch {}'.format(batch_idx))
-    webify(output_dir)
 
 
 class SoundLogger_concat_fullset(Callback):
