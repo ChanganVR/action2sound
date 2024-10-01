@@ -8,7 +8,8 @@ import glob
 from collections import defaultdict
 
 from torch.utils.data import Dataset
-from data_loader.transforms import *
+from torchvision import transforms
+from torchvision.transforms._transforms_video import RandomCropVideo, RandomResizedCropVideo,CenterCropVideo, NormalizeVideo,ToTensorVideo,RandomHorizontalFlipVideo
 import torch
 import torchaudio
 import decord
@@ -199,6 +200,8 @@ class Ego4DSounds(Dataset):
                 'video_32': video_32}
 
     def load_video(self, video_fp, num_frames):
+        from decord import bridge
+        bridge.set_bridge('torch')
         video_size= (num_frames, self.video_params['input_res'], self.video_params['input_res'], 3)
         try:
             vr = VideoReader(video_fp, ctx=cpu(0))
